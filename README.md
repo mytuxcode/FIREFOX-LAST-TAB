@@ -256,3 +256,7 @@ echo "Script completed successfully."
 
 ---
 
+## 🐧 Author
+
+**Maintainer:** [@mytuxcode](https://github.com/mytuxcode)  
+If this project helps you, consider starring ⭐ the repository!
