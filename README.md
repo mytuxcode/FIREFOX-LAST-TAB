@@ -3,195 +3,256 @@
 ## 📘 Overview
 
 By default, Firefox closes the entire browser window when you close the last remaining tab.  
-This PowerShell script lets you **disable that behavior** by changing the hidden preference:
+These scripts (for **Windows PowerShell** and **Linux/macOS Bash**) disable that behavior by setting:
 
 ```
-browser.tabs.closeWindowWithLastTab
+browser.tabs.closeWindowWithLastTab = false
 ```
 
 When set to `false`, closing the last tab will **open a new blank tab instead of closing the window** — preventing accidental browser shutdowns.
 
 ---
 
-## ⚙️ What the Script Does
+## ⚙️ Included Scripts
 
-The script performs the following steps:
-
-1. **Detects your Firefox profile path** automatically (e.g., `C:\Users\<username>\AppData\Roaming\Mozilla\Firefox\Profiles\xxxx.default-release`).
-2. **Displays manual instructions** for users who want to change the setting themselves via `about:config`.
-3. **Offers an optional automatic fix**, which:
-   - Locates your `prefs.js` file in the Firefox profile directory.
-   - Searches for the `browser.tabs.closeWindowWithLastTab` preference.
-   - Changes its value from `true` → `false`, or adds it if missing.
-4. **Applies the update** to Firefox’s configuration and instructs you to restart Firefox.
-
----
-
-## 💻 Script Contents
-
-Save the following script as `Set-FirefoxLastTabPref.ps1`:
+### 🪟 Windows PowerShell Script (`Set-FirefoxLastTabPref.ps1`)
 
 ```powershell
 <#
 .SYNOPSIS
-    Guides or automates changing the "browser.tabs.closeWindowWithLastTab" setting in Firefox.
+    Universal PowerShell script to change the Firefox setting
+    "browser.tabs.closeWindowWithLastTab" to false.
 
 .DESCRIPTION
-    This script locates your Firefox profile folder and offers two options:
-    1. Display manual instructions to change the setting in about:config.
-    2. Automatically edit the prefs.js file to set the preference to false.
+    Works across all Windows systems, regardless of username or profile name.
+    - Automatically detects all Firefox profiles.
+    - Prompts user if multiple profiles are found.
+    - Guides users through manual or automatic configuration.
+    - Updates prefs.js safely with backup.
 
 .NOTES
     File: Set-FirefoxLastTabPref.ps1
-    Tested on: Windows 10 / 11
+    Compatible: Windows 10 / 11
+    Version: 2.0 (Universal Edition)
 #>
 
+Clear-Host
 Write-Host "---------------------------------------------"
 Write-Host "  Firefox: Prevent Closing Window with Last Tab"
 Write-Host "---------------------------------------------`n"
 
-# Locate Firefox profile directory
-$FirefoxProfilePath = Get-ChildItem "$env:APPDATA\Mozilla\Firefox\Profiles" -Directory | 
-    Where-Object { $_.Name -match '\.default' -or $_.Name -match '\.default-release' } | 
-    Select-Object -First 1
+$FirefoxAppData = Join-Path $env:APPDATA "Mozilla\Firefox\Profiles"
 
-if (-not $FirefoxProfilePath) {
-    Write-Host "⚠️  Firefox profile not found. Please open Firefox once to create it."
+if (-not (Test-Path $FirefoxAppData)) {
+    Write-Host "⚠️  Firefox profile directory not found."
+    Write-Host "Please make sure Firefox is installed and opened at least once."
     exit
 }
 
-Write-Host "✅ Firefox profile found:"
-Write-Host "   $($FirefoxProfilePath.FullName)`n"
+$Profiles = Get-ChildItem -Path $FirefoxAppData -Directory | Sort-Object Name
+if (-not $Profiles) {
+    Write-Host "⚠️  No profiles found. Please open Firefox once to create one."
+    exit
+}
+
+if ($Profiles.Count -gt 1) {
+    Write-Host "Multiple Firefox profiles detected:`n"
+    for ($i = 0; $i -lt $Profiles.Count; $i++) {
+        Write-Host "[$($i+1)] $($Profiles[$i].Name)"
+    }
+    $selection = Read-Host "`nEnter the number for the profile you want to modify"
+    if ($selection -match '^\d+$' -and $selection -ge 1 -and $selection -le $Profiles.Count) {
+        $ProfilePath = $Profiles[$selection - 1].FullName
+    } else {
+        Write-Host "❌ Invalid selection. Exiting."
+        exit
+    }
+} else {
+    $ProfilePath = $Profiles[0].FullName
+}
+
+Write-Host "`n✅ Profile selected:"
+Write-Host "   $ProfilePath`n"
 
 Write-Host "-------------------------------------------------------------"
-Write-Host "MANUAL METHOD:"
+Write-Host "MANUAL METHOD (Optional)"
 Write-Host "-------------------------------------------------------------"
 Write-Host "1️⃣  Open Firefox"
-Write-Host "2️⃣  In the address bar, type: about:config"
+Write-Host "2️⃣  Type: about:config  and press ENTER"
 Write-Host "3️⃣  Click 'Accept the Risk and Continue'"
 Write-Host "4️⃣  Search for: browser.tabs.closeWindowWithLastTab"
 Write-Host "5️⃣  Toggle the value from TRUE → FALSE`n"
 
-# Ask if the user wants to update automatically
-$choice = Read-Host "Would you like to automatically apply this change? (Y/N)"
-if ($choice -match '^[Yy]$') {
-    $prefsFile = Join-Path $FirefoxProfilePath.FullName "prefs.js"
-    if (-not (Test-Path $prefsFile)) {
-        Write-Host "⚠️  prefs.js file not found. Please open Firefox once and close it."
-        exit
-    }
-
-    # Read file and check for existing preference
-    $prefsContent = Get-Content $prefsFile -Raw
-    if ($prefsContent -match 'browser\.tabs\.closeWindowWithLastTab') {
-        # Replace true with false
-        $newContent = $prefsContent -replace 'user_pref\("browser\.tabs\.closeWindowWithLastTab", true\);', 'user_pref("browser.tabs.closeWindowWithLastTab", false);'
-    }
-    else {
-        # Append new preference
-        $newContent = $prefsContent + "`nuser_pref(""browser.tabs.closeWindowWithLastTab"", false);"
-    }
-
-    # Write back to file
-    Set-Content -Path $prefsFile -Value $newContent -Encoding UTF8
-    Write-Host "`n✅ Preference updated successfully!"
-    Write-Host "Please restart Firefox for the changes to take effect."
-}
-else {
-    Write-Host "`nManual instructions displayed above."
+$choice = Read-Host "Would you like to apply this change automatically? (Y/N)"
+if ($choice -notmatch '^[Yy]$') {
+    Write-Host "`nManual instructions displayed above. Exiting..."
+    exit
 }
 
-Write-Host "`nDone."
+$prefsFile = Join-Path $ProfilePath "prefs.js"
+if (-not (Test-Path $prefsFile)) {
+    Write-Host "⚠️  prefs.js not found. Please open Firefox once and close it again, then retry."
+    exit
+}
+
+$backupFile = "$prefsFile.bak_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+Copy-Item $prefsFile $backupFile -Force
+Write-Host "🗄️  Backup created at: $backupFile`n"
+
+$prefsContent = Get-Content $prefsFile -Raw
+if ($prefsContent -match 'browser\.tabs\.closeWindowWithLastTab') {
+    $newContent = $prefsContent -replace 'user_pref\("browser\.tabs\.closeWindowWithLastTab", true\);', 'user_pref("browser.tabs.closeWindowWithLastTab", false);'
+} else {
+    $newContent = $prefsContent + "`nuser_pref(""browser.tabs.closeWindowWithLastTab"", false);"
+}
+
+Set-Content -Path $prefsFile -Value $newContent -Encoding UTF8
+Write-Host "✅ Preference successfully updated!"
+Write-Host "🔄 Please restart Firefox for the changes to take effect.`n"
+Write-Host "Script completed successfully."
 ```
 
 ---
 
-## 🧭 How to Use
+### 🐧 Linux/macOS Bash Script (`set_last_tab_pref.sh`)
 
-### **Option 1 — Manual Method**
+```bash
+#!/bin/bash
+# ============================================================
+# Firefox Universal Preference Modifier
+# ------------------------------------------------------------
+# Purpose:
+#   Prevent Firefox from closing the entire window when the
+#   last tab is closed by setting:
+#       browser.tabs.closeWindowWithLastTab = false
+#
+# Works on: Linux (Debian, Ubuntu, Mint, Zorin, etc.) and macOS
+# Version: 2.0 (Univeral Edition)
+# ============================================================
 
-If you prefer to change the setting yourself:
+echo "---------------------------------------------"
+echo "  Firefox: Prevent Closing Window with Last Tab"
+echo "---------------------------------------------"
+echo
 
-1. Open Firefox.
-2. Type `about:config` in the address bar and press **Enter**.
-3. Click **Accept the Risk and Continue**.
-4. In the search bar, type:
-   ```
-   browser.tabs.closeWindowWithLastTab
-   ```
-5. Double-click the entry or click the toggle button to change the value from `true` to `false`.
-6. Done! You no longer close the entire window when the last tab is closed.
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    PROFILE_DIR="$HOME/Library/Application Support/Firefox/Profiles"
+else
+    PROFILE_DIR="$HOME/.mozilla/firefox"
+fi
+
+if [ ! -d "$PROFILE_DIR" ]; then
+    echo "⚠️  Firefox profile directory not found."
+    echo "Please make sure Firefox is installed and has been opened at least once."
+    exit 1
+fi
+
+PROFILES=($(find "$PROFILE_DIR" -maxdepth 1 -type d -name "*.default*" -o -name "*.default-release*" | sort))
+PROFILE_COUNT=${#PROFILES[@]}
+
+if [ "$PROFILE_COUNT" -eq 0 ]; then
+    echo "⚠️  No Firefox profiles found. Please open Firefox once and close it, then rerun this script."
+    exit 1
+elif [ "$PROFILE_COUNT" -eq 1 ]; then
+    PROFILE_PATH="${PROFILES[0]}"
+else
+    echo "Multiple Firefox profiles detected:"
+    i=1
+    for profile in "${PROFILES[@]}"; do
+        echo "[$i] $profile"
+        ((i++))
+    done
+    echo
+    read -p "Enter the number for the profile you want to modify: " selection
+    if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -ge 1 ] && [ "$selection" -le "$PROFILE_COUNT" ]; then
+        PROFILE_PATH="${PROFILES[$((selection-1))]}"
+    else
+        echo "❌ Invalid selection. Exiting."
+        exit 1
+    fi
+fi
+
+echo
+echo "✅ Profile selected:"
+echo "   $PROFILE_PATH"
+echo
+
+echo "-------------------------------------------------------------"
+echo "MANUAL METHOD (Optional)"
+echo "-------------------------------------------------------------"
+echo "1️⃣  Open Firefox"
+echo "2️⃣  Type: about:config  and press ENTER"
+echo "3️⃣  Click 'Accept the Risk and Continue'"
+echo "4️⃣  Search for: browser.tabs.closeWindowWithLastTab"
+echo "5️⃣  Toggle the value from TRUE → FALSE"
+echo
+
+read -p "Would you like to apply this change automatically? (y/n): " apply_choice
+if [[ ! "$apply_choice" =~ ^[Yy]$ ]]; then
+    echo
+    echo "Manual instructions shown above. Exiting..."
+    exit 0
+fi
+
+PREF_FILE="$PROFILE_PATH/prefs.js"
+if [ ! -f "$PREF_FILE" ]; then
+    echo "⚠️  prefs.js not found. Please open Firefox once and close it again, then rerun this script."
+    exit 1
+fi
+
+BACKUP_FILE="${PREF_FILE}.bak_$(date +%Y%m%d_%H%M%S)"
+cp "$PREF_FILE" "$BACKUP_FILE"
+echo "🗄️  Backup created at: $BACKUP_FILE"
+echo
+
+if grep -q 'browser.tabs.closeWindowWithLastTab' "$PREF_FILE"; then
+    sed -i.bak 's/user_pref("browser\.tabs\.closeWindowWithLastTab", true);/user_pref("browser.tabs.closeWindowWithLastTab", false);/' "$PREF_FILE"
+else
+    echo 'user_pref("browser.tabs.closeWindowWithLastTab", false);' >> "$PREF_FILE"
+fi
+
+echo "✅ Preference successfully updated!"
+echo "🔄 Please restart Firefox for the changes to take effect."
+echo
+echo "Script completed successfully."
+```
 
 ---
 
-### **Option 2 — Run the PowerShell Script (Automatic Method)**
+## 🧭 How to Run
 
-#### 🪟 Step 1 — Save the Script
+### 🪟 **Windows (PowerShell)**
 
-- Save the code above into a file named:
-  ```
-  Set-FirefoxLastTabPref.ps1
-  ```
-
-#### 🪟 Step 2 — Allow PowerShell Scripts (if needed)
-
-If you get an error about scripts being disabled, run this once as Administrator:
-
-```powershell
-Set-ExecutionPolicy RemoteSigned
-```
-
-Press **Y** and **Enter** to confirm.
-
-#### 🪟 Step 3 — Run the Script
-
-1. Right-click the file → **Run with PowerShell**  
-   or  
-   Open PowerShell, navigate to the folder where the script is saved, then run:
-
+1. Save the code as `Set-FirefoxLastTabPref.ps1`  
+2. Right-click the file → **Run with PowerShell**, or run manually:
    ```powershell
    .\Set-FirefoxLastTabPref.ps1
    ```
+3. Follow the prompts and restart Firefox.
 
-2. When prompted, choose:
-   - **Y** to automatically apply the change.
-   - **N** to follow the manual instructions instead.
+### 🐧 **Linux / macOS (Bash)**
 
-3. Restart Firefox for changes to take effect.
-
----
-
-## 🧩 Example Output
-
-```
----------------------------------------------
-  Firefox: Prevent Closing Window with Last Tab
----------------------------------------------
-
-✅ Firefox profile found:
-   C:\Users\demo\AppData\Roaming\Mozilla\Firefox\Profiles\xxxx.default-release
-
-MANUAL METHOD:
-1️⃣  Open Firefox
-2️⃣  In the address bar, type: about:config
-3️⃣  Click 'Accept the Risk and Continue'
-4️⃣  Search for: browser.tabs.closeWindowWithLastTab
-5️⃣  Toggle the value from TRUE → FALSE
-
-Would you like to automatically apply this change? (Y/N): Y
-
-✅ Preference updated successfully!
-Please restart Firefox for the changes to take effect.
-```
+1. Save the code as `set_last_tab_pref.sh`  
+2. Make it executable:
+   ```bash
+   chmod +x set_last_tab_pref.sh
+   ```
+3. Run it:
+   ```bash
+   ./set_last_tab_pref.sh
+   ```
+4. Follow the prompts and restart Firefox.
 
 ---
 
 ## 🧠 Notes
 
-- The `prefs.js` file is automatically updated in your current Firefox profile.
-- Always **close Firefox before running the script** to avoid overwriting preferences.
-- If Firefox sync is enabled, this setting may sync across your devices.
-- You can re-enable the default behavior by setting the value back to `true`.
+- Always **close Firefox before running the script** to avoid overwriting preferences.  
+- Both scripts automatically **detect your profiles** and create **timestamped backups**.  
+- You can re-enable the original behavior by setting:
+  ```
+  browser.tabs.closeWindowWithLastTab = true
+  ```
 
 ---
 
