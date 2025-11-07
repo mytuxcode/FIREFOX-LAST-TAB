@@ -9,7 +9,6 @@
 
 .NOTES
     File: Set-FirefoxLastTabPref.ps1
-    Author: Andy
     Tested on: Windows 10 / 11
 #>
 
