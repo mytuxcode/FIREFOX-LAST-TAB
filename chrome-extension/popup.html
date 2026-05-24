@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Keep Last Tab</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <img class="logo" src="icons/icon48.png" alt="" width="28" height="28" />
+      <h1 class="title">Keep Last Tab</h1>
+    </header>
+
+    <div class="row">
+      <div class="row-text">
+        <span class="row-label">Keep window open</span>
+        <span class="row-sub">Closing the last tab opens a new tab</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle" />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <p class="status" id="status"></p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

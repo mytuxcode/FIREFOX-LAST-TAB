@@ -1,19 +1,57 @@
-# 🦊 Firefox — Prevent Closing Window with Last Tab
+# 🦊 Prevent Closing Window with Last Tab
 
 ## 📘 Overview
 
-By default, Firefox closes the entire browser window when you close the last remaining tab.  
-These scripts (for **Windows PowerShell** and **Linux/macOS Bash**) disable that behavior by setting:
+By default, **Firefox** and **Google Chrome** close the entire browser window when you close the last remaining tab.
 
-```
-browser.tabs.closeWindowWithLastTab = false
-```
+This repo provides two ways to fix that:
 
-When set to `false`, closing the last tab will **open a new blank tab instead of closing the window** — preventing accidental browser shutdowns.
+- **Firefox** — scripts (Windows PowerShell + Linux/macOS Bash) that set the built-in preference `browser.tabs.closeWindowWithLastTab = false`.
+- **Google Chrome** — a Manifest V3 extension (in [`chrome-extension/`](./chrome-extension)) that reproduces the same behavior, since Chrome has no equivalent setting.
+
+In both cases, closing the last tab will **open a new blank tab instead of closing the window** — preventing accidental browser shutdowns.
 
 ---
 
-## ⚙️ Included Scripts
+## 🌐 Google Chrome Extension (`chrome-extension/`)
+
+Chrome doesn't expose a setting like Firefox's `closeWindowWithLastTab`, so this is implemented as a small extension. Its background service worker watches tab events and, when you close the **last** tab in a normal window, immediately opens a fresh new tab so the window stays open. A popup lets you toggle the behavior on/off.
+
+### Install (Load Unpacked)
+
+1. Open Chrome and go to `chrome://extensions`.
+2. Enable **Developer mode** (top-right toggle).
+3. Click **Load unpacked** and select the `chrome-extension/` folder from this repo.
+4. The **Keep Last Tab** icon appears in the toolbar. Click it to turn the behavior on or off (on by default).
+
+### How it works
+
+- `manifest.json` — Manifest V3 config; requests only the `storage` permission.
+- `background.js` — keeps a live per-window tab count and, on the last tab's removal (when the window isn't already closing), calls `chrome.tabs.create()` to keep the window alive.
+- `popup.html` / `popup.css` / `popup.js` — a small on/off switch; the setting is saved to `chrome.storage.sync`.
+
+> **Note:** Unlike Firefox's native preference, this is a best-effort approach using Chrome's extension APIs. Chrome tears the window down asynchronously when the last tab closes, and the extension races to open a new tab before that completes. It works reliably for normal interactive use; very rare edge cases (e.g. the service worker waking from a cold start on the very first close) may still let a window close.
+
+### Files
+
+```
+chrome-extension/
+├── manifest.json
+├── background.js
+├── popup.html
+├── popup.css
+├── popup.js
+└── icons/
+    ├── icon16.png
+    ├── icon48.png
+    └── icon128.png
+```
+
+---
+
+## 🦊 Firefox Scripts
+
+These scripts set Firefox's built-in preference `browser.tabs.closeWindowWithLastTab = false`.
 
 ### 🪟 Windows PowerShell Script (`Set-FirefoxLastTabPref.ps1`)
 
